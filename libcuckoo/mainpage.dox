@@ -15,3 +15,21 @@
  *  same elements. Most operations will lock no more than two buckets
  *  at a time, thereby allowing for concurrent reads and writes.
  */
+
+ /*！mainpage libcuckoo文档
+ *
+  * libcuckoo是一个高性能，内存有效的哈希表
+  * 支持并发读写。
+ *
+  *cuckoohash_map是哈希表的类。 它的接口
+  *类似于STL的unordered_map，但确实包含一些
+  *重要的差异。
+ *
+  *在内部，哈希表被分区为一个数组
+  *桶，每个桶包含SLOT_PER_BUCKET个槽
+  *存储项目。
+ *
+  *每个桶都有一个锁，以确保多个线程不会修改
+  *相同的元素。 大多数操作同一时间将锁定不超过两个桶，
+  *同时允许并发读写。
+ */

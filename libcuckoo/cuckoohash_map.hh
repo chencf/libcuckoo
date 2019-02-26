@@ -936,20 +936,32 @@ private:
       throw hashpower_changed();
     }
   }
+/*
+   If necessary, rehashes the buckets corresponding to the given lock index,
+   and sets the is_migrated flag to true. We should only ever do migrations
+   if the data is nothrow move constructible, so this function is noexcept.
 
-  // If necessary, rehashes the buckets corresponding to the given lock index,
-  // and sets the is_migrated flag to true. We should only ever do migrations
-  // if the data is nothrow move constructible, so this function is noexcept.
-  //
-  // This only works if our current locks array is at the maximum size, because
-  // otherwise, rehashing could require taking other locks. Assumes the lock at
-  // the given index is taken.
-  //
-  // If IS_LAZY is true, we assume the lock is being rehashed in a lazy
-  // (on-demand) fashion, so we additionally decrement the number of locks we
-  // need to lazy_rehash. This may trigger false sharing with other
-  // lazy-rehashing threads, but the hope is that the fraction of such
-  // operations is low-enough to not significantly impact overall performance.
+   This only works if our current locks array is at the maximum size, because
+   otherwise, rehashing could require taking other locks. Assumes the lock at
+   the given index is taken.
+
+   If IS_LAZY is true, we assume the lock is being rehashed in a lazy
+   (on-demand) fashion, so we additionally decrement the number of locks we
+   need to lazy_rehash. This may trigger false sharing with other
+   lazy-rehashing threads, but the hope is that the fraction of such
+   operations is low-enough to not significantly impact overall performance.
+*/
+  /*
+   如有必要，rehash与给定锁定索引相对应的bucket，并将is_migrated标志设置为true。
+   我们应该只进行迁移 如果数据不是可移动构造的，那么这个函数是noexcept。
+  
+    这仅在我们当前的锁定数组处于最大大小时才有效，因为
+    否则,rehash可能需要执行其他锁操作。 假设锁定在给定的索引。
+  
+    如果IS_LAZY为真，我们假设锁是以惰性方法（按需）中进行的rehash，所以我们另外减少锁的数量
+    需要lazy_rehash。 这可能会触发与其他人懒惰的线程错误共享，但是希望这样的操作概率足够低，不会对整体性能产生重大影响。
+   */
+
   static constexpr bool kIsLazy = true;
   static constexpr bool kIsNotLazy = false;
 
@@ -1301,12 +1313,20 @@ private:
                    std::forward<Args>(val)...);
     ++get_current_locks()[lock_ind(bucket_ind)].elem_counter();
   }
-
-  // try_find_insert_bucket will search the bucket for the given key, and for
-  // an empty slot. If the key is found, we store the slot of the key in
-  // `slot` and return false. If we find an empty slot, we store its position
-  // in `slot` and return true. If no duplicate key is found and no empty slot
-  // is found, we store -1 in `slot` and return true.
+/*
+   try_find_insert_bucket will search the bucket for the given key, and for
+   an empty slot. If the key is found, we store the slot of the key in
+   `slot` and return false. If we find an empty slot, we store its position
+   in `slot` and return true. If no duplicate key is found and no empty slot
+   is found, we store -1 in `slot` and return true.
+*/
+  /*
+   try_find_insert_bucket将在桶中搜索给定的key，并为
+    一个空槽。 如果找到key，我们将key的槽存储在
+    `slot`并返回false。 如果我们找到一个空槽，我们会存储它的位置
+    在`slot`中返回true。 如果没有找到重复的key且没有空槽
+    找到了，我们在`slot`中存储-1并返回true。
+   */
   template <typename K>
   bool try_find_insert_bucket(const bucket &b, int &slot,
                               const partial_t partial, const K &key) const {
@@ -1853,13 +1873,21 @@ private:
     all_locks_.emplace_back(std::move(new_locks));
   }
 
-  // cuckoo_expand_simple will resize the table to at least the given
-  // new_hashpower. When we're shrinking the table, if the current table
-  // contains more elements than can be held by new_hashpower, the resulting
-  // hashpower will be greater than `new_hp`. It needs to take all the bucket
-  // locks, since no other operations can change the table during expansion.
-  // Throws libcuckoo_maximum_hashpower_exceeded if we're expanding beyond the
-  // maximum hashpower, and we have an actual limit.
+/*
+   cuckoo_expand_simple will resize the table to at least the given
+   new_hashpower. When we're shrinking the table, if the current table
+   contains more elements than can be held by new_hashpower, the resulting
+   hashpower will be greater than `new_hp`. It needs to take all the bucket
+   locks, since no other operations can change the table during expansion.
+   Throws libcuckoo_maximum_hashpower_exceeded if we're expanding beyond the
+   maximum hashpower, and we have an actual limit.
+*/
+  /*
+   cuckoo_expand_simple会将表的大小调整为至少给定的值new_hashpower。
+   当我们缩小表格时，如果是当前表格包含的元素多于new_hashpower可以保存的元素,
+   则最终hashpower将大于`new_hp`。 它需要占用所有桶锁，因为在扩展期间没有其他操作可以更改表。
+   如果我们正在扩展超过最大hashpower，则抛出libcuckoo_maximum_hashpower_exceeded，因为我们有一个实际限制。
+   */
   template <typename TABLE_MODE, typename AUTO_RESIZE>
   cuckoo_status cuckoo_expand_simple(size_type new_hp) {
     auto all_locks_manager = lock_all(TABLE_MODE());
@@ -1964,6 +1992,7 @@ private:
 
   // Does a batch resize of the remaining data in old_buckets_. Assumes all the
   // locks have already been taken.
+  // 是否批量调整old_buckets_中剩余数据的大小。 假设已经执行了所有锁操作。
   void rehash_with_workers() noexcept {
     locks_t &current_locks = get_current_locks();
     parallel_exec_noexcept(

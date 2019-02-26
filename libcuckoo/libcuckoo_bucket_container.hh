@@ -24,6 +24,18 @@
  * @tparam Partial type of partial keys
  * @tparam SLOT_PER_BUCKET number of slots for each bucket in the table
  */
+/**
+  * libcuckoo_bucket_container管理表的键值对的存储。
+  *它将项目内联存储在未初始化的内存中，并跟踪哪些内容
+  *槽有实时数据，哪些没有。 它还存储部分哈希值
+  *每个现场key。 它的大小是2的幂。
+ *
+  * @tparam表中键的键类型
+  * @tparam表中的T类型的值
+  * @tparam分配器类型的键值对分配器
+  * @tparam部分键的部分键
+  * @tparam SLOT_PER_BUCKET表中每个桶的槽数
+ */
 template <class Key, class T, class Allocator, class Partial,
           std::size_t SLOT_PER_BUCKET>
 class libcuckoo_bucket_container {
@@ -52,6 +64,12 @@ public:
    * in place. The lifetime of bucket data should be managed by the container.
    * It is the user's responsibility to confirm whether the data they are
    * accessing is live or not.
+   */
+  /*
+   每个桶中包含SLOT_PER_BUCKET个键值对，以及它们的部分键和占用信息。
+   它使用aligned_storage数组来存储键和值，以允许构建和销毁键值对。
+   桶中数据的生命周期应由容器管理。
+   用户有责任确认他们访问的数据是否有效。
    */
   class bucket {
   public:
