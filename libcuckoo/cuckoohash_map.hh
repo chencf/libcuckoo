@@ -571,15 +571,21 @@ public:
    * @return true if a new key was inserted, false if the key was already in
    * the table
    */
+  /*
+   在表中搜索@p键。 如果找到key，则在现有值上调用@p fn，传入的key和值不会发生任何变化。
+   仿函数可以改变值，并且应该返回@c true以便擦除元素，否则返回@c false。
+   如果找不到key并且必须插入key，则将通过转发给定的key和值来构造该对。
+   如果table中没有剩余空间，则会自动展开。 扩展可能会引发异常。
+   */
   template <typename K, typename F, typename... Args>
   bool uprase_fn(K &&key, F fn, Args &&... val) {
     hash_value hv = hashed_key(key);
     auto b = snapshot_and_lock_two<normal_mode>(hv);
     table_position pos = cuckoo_insert_loop<normal_mode>(hv, b, key);
-    if (pos.status == ok) {
+    if (pos.status == ok) {// 找到空slot
       add_to_bucket(pos.index, pos.slot, hv.partial, std::forward<K>(key),
                     std::forward<Args>(val)...);
-    } else {
+    } else { //slot中已存在key，直接替换value值
       if (fn(buckets_[pos.index].mapped(pos.slot))) {
         del_from_bucket(pos.index, pos.slot);
       }
@@ -794,8 +800,12 @@ private:
   // alt_index returns the other possible bucket that the given hashed key
   // could be. It takes the first possible bucket as a parameter. Note that
   // this function will return the first possible bucket if index is the
-  // second possible bucket, so alt_index(ti, partial, alt_index(ti, partial,
-  // index_hash(ti, hv))) == index_hash(ti, hv).
+  // second possible bucket, so
+  // alt_index(ti, partial, alt_index(ti, partial, index_hash(ti, hv))) == index_hash(ti, hv).
+  /*
+   alt_index返回给定散列键可能的另一个可能的桶。 它将第一个可能的桶作为参数。
+   请注意，如果index是第二个可能的存储桶，则此函数将返回第一个可能的存储桶.
+   */
   static inline size_type alt_index(const size_type hp, const partial_t partial,
                                     const size_type index) {
     // ensure tag is nonzero for the multiply. 0xc6a4a7935bd1e995 is the
@@ -891,8 +901,8 @@ private:
   /*
    每种锁定方法可以以两种模式操作：locked_table_mode和normal_mode。
    当我们处于locked_table_mode时，我们假设调用者已经对bucket进行了所有锁定。
-   我们还要求立即重新处理所有数据，以便调用者永远不必查看任何锁定。
-   在normal_mode中，我们实际上是采取锁定，并且可以懒惰地重新进行。
+   我们还要求所有数据立即被rehash，以便调用者永远不必查看任何锁定。
+   在normal_mode中，我们实际上是采取锁定，并且可以执行惰性rehash。
    */
   using locked_table_mode = std::integral_constant<bool, true>;
   using normal_mode = std::integral_constant<bool, false>;
@@ -1094,7 +1104,7 @@ private:
    hashpower.
    */
   /*
-   snapshot_and_lock_two加载锁定与给定哈希值关联的存储bucket，确保在获取锁之前hashpower不会更改。
+   snapshot_and_lock_two加载锁定与给定哈希值关联的存储bucket，确保在加锁之前hashpower不会更改。
    因此，只要保持锁定，它就确保对应于散列值的bucket和锁将保持正确。 它返回与哈希值和当前哈希值相关联的bucket索引。
    */
   template <typename TABLE_MODE>
@@ -1268,36 +1278,34 @@ private:
    */
   /*
    cuckoo_insert尝试在任一bucket中找到一个空slot以插入给定的key，必要时执行cuckoo散列。 它希望锁定在函数之外。
-   在插入之前，它检查key是否已在表中。 杜鹃哈希礼物多个并发问题，在函数中解释。该
-  以下返回状态是可能的：
+   在插入之前，它检查key是否已在表中。 cuckoo hash存在多个并发问题，在函数中解释。
+   以下是可能的返回状态：
    
     ok  - 找到一个空槽，在函数结束后，两个bucket上都会有锁，并返回空槽的位置
   
     failure_key_duplicated  - 找到重复的key，将保持锁定，并返回重复key的位置
   
-    failure_under_expansion  - 由于并发扩展而失败
-   操作。 锁被释放。 没有返回有意义的位置。
+    failure_under_expansion  - 由于并发扩展而失败操作。 锁被释放。 没有返回有意义的位置。
   
-    failure_table_full  - 无法找到表的空槽。锁
-    被释放。 没有返回有意义的位置。
+    failure_table_full  - 无法找到表的空槽。锁被释放。 没有返回有意义的位置。
    */
   template <typename TABLE_MODE, typename K>
   table_position cuckoo_insert(const hash_value hv, TwoBuckets &b, K &key) {
     int res1, res2;
     bucket &b1 = buckets_[b.i1];
-    if (!try_find_insert_bucket(b1, res1, hv.partial, key)) {
+    if (!try_find_insert_bucket(b1, res1, hv.partial, key)) {// b1中key已存在
       return table_position{b.i1, static_cast<size_type>(res1),
                             failure_key_duplicated};
     }
     bucket &b2 = buckets_[b.i2];
-    if (!try_find_insert_bucket(b2, res2, hv.partial, key)) {
+    if (!try_find_insert_bucket(b2, res2, hv.partial, key)) {// b2中key已存在
       return table_position{b.i2, static_cast<size_type>(res2),
                             failure_key_duplicated};
     }
-    if (res1 != -1) {
+    if (res1 != -1) {// b1中key对应slot为空
       return table_position{b.i1, static_cast<size_type>(res1), ok};
     }
-    if (res2 != -1) {
+    if (res2 != -1) {// b2中key对应slot为空
       return table_position{b.i2, static_cast<size_type>(res2), ok};
     }
 
@@ -1354,9 +1362,8 @@ private:
    is found, we store -1 in `slot` and return true.
 */
   /*
-   try_find_insert_bucket将在bucket中搜索给定的key，并为
-    一个空槽。 如果找到key，我们将key的槽存储在
-    `slot`并返回false。 如果我们找到一个空槽，我们会存储它的位置
+   try_find_insert_bucket将在bucket中为给定的key搜索一个空slot。
+   如果找到key，我们将key的槽存储在`slot`并返回false。 如果我们找到一个空槽，我们会存储它的位置
     在`slot`中返回true。 如果没有找到重复的key且没有空槽
     找到了，我们在`slot`中存储-1并返回true。
    */
@@ -1376,7 +1383,7 @@ private:
           return false;
         }
       } else {
-        slot = i;
+        slot = i; //todo need return?
       }
     }
     return true;
@@ -1416,7 +1423,7 @@ private:
    will not.
    */
   /*
-   run_cuckoo在表上执行cuckoo散列，试图释放任一插入bucket上的slot，这些slot在开始之前被假定为已锁定。
+   run_cuckoo在table上执行cuckoo散列，试图释放任一插入bucket上的slot，这些slot在开始之前被假定为已锁定。
    成功时，释放的存储bucket和slot存储在insert_bucket和insert_slot中。
    为了执行搜索和交换，它必须释放锁，这可能导致某些并发问题，其细节在函数中解释。
    如果run_cuckoo返回ok（成功），则`b`将处于活动状态 ，否则不会。
@@ -1995,7 +2002,7 @@ private:
 */
   /*
    cuckoo_expand_simple会将表的大小调整为至少给定的值new_hashpower。
-   当我们缩小表格时，如果是当前表格包含的元素多于new_hashpower可以保存的元素,
+   当我们缩小table时，如果是当前table包含的元素多于new_hashpower可以保存的元素,
    则最终hashpower将大于`new_hp`。 它需要占用所有bucket锁，因为在扩展期间没有其他操作可以更改表。
    如果我们正在扩展超过最大hashpower，则抛出libcuckoo_maximum_hashpower_exceeded，因为我们有一个实际限制。
    */
@@ -2118,8 +2125,7 @@ private:
 
   // Deletion functions
 
-  // Removes an item from a bucket, decrementing the associated counter as
-  // well.
+  // Removes an item from a bucket, decrementing the associated counter as well.
   void del_from_bucket(const size_type bucket_ind, const size_type slot) {
     buckets_.eraseKV(bucket_ind, slot);
     --get_current_locks()[lock_ind(bucket_ind)].elem_counter();
@@ -2139,7 +2145,6 @@ private:
   }
 
   // Rehashing functions
-
   template <typename TABLE_MODE> bool cuckoo_rehash(size_type n) {
     const size_type hp = hashpower();
     if (n == hp) {
