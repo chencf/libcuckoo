@@ -25,7 +25,7 @@
  * @tparam SLOT_PER_BUCKET number of slots for each bucket in the table
  */
 /**
-  * libcuckoo_bucket_container管理表的键值对的存储。
+  * libcuckoo_bucket_container管理table的键值对的存储。
   *它将项目内联存储在未初始化的内存中，并跟踪哪些内容
   *槽有实时数据，哪些没有。 它还存储部分哈希值
   *每个现场key。 它的大小是2的幂。

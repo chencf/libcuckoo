@@ -1964,16 +1964,24 @@ private:
     return ok;
   }
 
-  // When we expand the contanier, we may need to expand the locks array, if
-  // the current locks array is smaller than the maximum size and also smaller
-  // than the number of buckets in the upcoming buckets container. In this
-  // case, we grow the locks array to the smaller of the maximum lock array
-  // size and the bucket count. This is done by allocating an entirely new lock
-  // container, taking all the locks, copying over the counters, and then
-  // finally adding it to the end of `all_locks_`, thereby designating it the
-  // "current" locks container. It is the responsibility of the caller to
-  // unlock all locks taken, including the new locks, whenever it is done with
-  // them, so that old threads can resume and potentially re-start.
+  /*
+   When we expand the contanier, we may need to expand the locks array, if
+   the current locks array is smaller than the maximum size and also smaller
+   than the number of buckets in the upcoming buckets container. In this
+   case, we grow the locks array to the smaller of the maximum lock array
+   size and the bucket count. This is done by allocating an entirely new lock
+   container, taking all the locks, copying over the counters, and then
+   finally adding it to the end of `all_locks_`, thereby designating it the
+   "current" locks container. It is the responsibility of the caller to
+   unlock all locks taken, including the new locks, whenever it is done with
+   them, so that old threads can resume and potentially re-start.
+   */
+  /*
+   当我们扩展contanier时，如果当前锁定数组小于最大大小并且还小于即将到来的存储桶容器中的存储桶数量，
+   我们可能需要扩展锁定数组。 在这种情况下，我们将locks数组增长到最大锁定数组大小和存储桶数量中的较小者。
+   这是通过分配一个全新的锁容器，获取所有锁，复制计数器，然后最后将它添加到`all_locks_`的末尾，
+   从而将其指定为“当前”锁容器来完成的。调用者有责任解锁所有锁，包括新锁，无论何时完成，以便旧线程可以恢复并可能重新启动。
+   */
   void maybe_resize_locks(size_type new_bucket_count) {
     locks_t &current_locks = get_current_locks();
     if (!(current_locks.size() < kMaxNumLocks &&
@@ -2004,7 +2012,7 @@ private:
    cuckoo_expand_simple会将表的大小调整为至少给定的值new_hashpower。
    当我们缩小table时，如果是当前table包含的元素多于new_hashpower可以保存的元素,
    则最终hashpower将大于`new_hp`。 它需要占用所有bucket锁，因为在扩展期间没有其他操作可以更改表。
-   如果我们正在扩展超过最大hashpower，则抛出libcuckoo_maximum_hashpower_exceeded，因为我们有一个实际限制。
+   如果我们正在扩展超过maximum hashpower，则抛出libcuckoo_maximum_hashpower_exceeded，因为我们有一个实际限制。
    */
   template <typename TABLE_MODE, typename AUTO_RESIZE>
   cuckoo_status cuckoo_expand_simple(size_type new_hp) {
@@ -2056,15 +2064,16 @@ private:
     return ok;
   }
 
-  // Executes the function over the given range, splitting the work between the
-  // current thread and any available worker threads.
-  //
-  // In the noexcept version, the functor must implement operator()(size_type
-  // start, size_type end).
-  //
-  // In the non-noexcept version, the functor will receive an additional
-  // std::exception_ptr& argument.
+  /*
+   Executes the function over the given range, splitting the work between the
+   current thread and any available worker threads.
 
+   In the noexcept version, the functor must implement operator()(size_type
+   start, size_type end).
+
+   In the non-noexcept version, the functor will receive an additional
+   std::exception_ptr& argument.
+*/
   template <typename F>
   void parallel_exec_noexcept(size_type start, size_type end, F func) {
     const size_type num_extra_threads = max_num_worker_threads();
@@ -2214,32 +2223,58 @@ private:
   // The equality function
   key_equal eq_fn_;
 
-  // container of buckets. The size or memory location of the buckets cannot be
-  // changed unless all the locks are taken on the table. Thus, it is only safe
-  // to access the buckets_ container when you have at least one lock held.
-  //
-  // Marked mutable so that const methods can rehash into this container when
-  // necessary.
+  /*
+   container of buckets. The size or memory location of the buckets cannot be
+   changed unless all the locks are taken on the table. Thus, it is only safe
+   to access the buckets_ container when you have at least one lock held.
+
+   Marked mutable so that const methods can rehash into this container when
+   necessary.
+   */
+  /*
+   桶的容器。 除非持有table的所有锁定，否则无法更改bucket的大小或内存位置。
+   因此，当您至少持有一个锁时，访问buckets_容器才是安全的。
+
+   标记为可变，以便const方法可以在必要时重新进入此容器。
+   */
   mutable buckets_t buckets_;
 
-  // An old container of buckets, containing data that may not have been
-  // rehashed into the current one. If valid, this will always have a hashpower
-  // exactly one less than the one in buckets_.
-  //
-  // Marked mutable so that const methods can rehash into this container when
-  // necessary.
+  /*
+   An old container of buckets, containing data that may not have been
+   rehashed into the current one. If valid, this will always have a hashpower
+   exactly one less than the one in buckets_.
+
+   Marked mutable so that const methods can rehash into this container when
+   necessary.
+   */
+  /*
+   一个旧的bucket容器，包含可能尚未rehash入当前容器的数据。如果有效，它的hashpower总是比buckets_中的hashpower少一。
+  
+   标记为可变，以便const方法可以在必要时重新进入此容器。
+   */
   mutable buckets_t old_buckets_;
 
-  // A linked list of all lock containers. We never discard lock containers,
-  // since there is currently no mechanism for detecting when all threads are
-  // done looking at the memory. The back lock container in this list is
-  // designated the "current" one, and is used by all operations taking locks.
-  // This container can be modified if either it is empty (which should only
-  // occur during construction), or if the modifying thread has taken all the
-  // locks on the existing "current" container. In the latter case, a
-  // modification must take place before a modification to the hashpower, so
-  // that other threads can detect the change and adjust appropriately. Marked
-  // mutable so that const methods can access and take locks.
+  /*
+   A linked list of all lock containers. We never discard lock containers,
+   since there is currently no mechanism for detecting when all threads are
+   done looking at the memory. The back lock container in this list is
+   designated the "current" one, and is used by all operations taking locks.
+   This container can be modified if either it is empty (which should only
+   occur during construction), or if the modifying thread has taken all the
+   locks on the existing "current" container. In the latter case, a
+   modification must take place before a modification to the hashpower, so
+   that other threads can detect the change and adjust appropriately.
+
+   Marked mutable so that const methods can access and take locks.
+   */
+  /*
+   所有锁容器的链表。 我们从不丢弃锁具，因为目前没有机制通过查看内存来检测所有线程何时完成。
+   此列表中的后锁容器被指定为“当前”容器，并且被锁定的所有操作使用。
+   如果该容器为空（仅应在构造期间发生），或者修改线程已取走现有“当前”容器上的所有锁，则可以修改此容器。
+   在后一种情况下，必须在修改hashpower之前进行修改，以便其他线程可以检测到更改并进行适当调整。
+
+   标记为可变，以便const方法可以访问并获取锁定。
+   */
   mutable all_locks_t all_locks_;
 
   // We keep track of the number of remaining locks in the latest locks array,
