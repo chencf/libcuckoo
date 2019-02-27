@@ -304,6 +304,10 @@ public:
    * has been moved.
    *
    */
+  /*
+   获取有关表的信息的方法。 查询方法
+  更改表的属性不会与并发操作同步，并且如果同时修改表，则可能返回过时的信息。 移动容器后，它们也将继续工作。
+   */
   /**@{*/
 
   /**
@@ -877,11 +881,19 @@ private:
 
   using LockManager = std::unique_ptr<spinlock, LockDeleter>;
 
-  // Each of the locking methods can operate in two modes: locked_table_mode
-  // and normal_mode. When we're in locked_table_mode, we assume the caller has
-  // already taken all locks on the buckets. We also require that all data is
-  // rehashed immediately, so that the caller never has to look through any
-  // locks. In normal_mode, we actually do take locks, and can rehash lazily.
+  /*
+   Each of the locking methods can operate in two modes: locked_table_mode
+   and normal_mode. When we're in locked_table_mode, we assume the caller has
+   already taken all locks on the buckets. We also require that all data is
+   rehashed immediately, so that the caller never has to look through any
+   locks. In normal_mode, we actually do take locks, and can rehash lazily.
+   */
+  /*
+   每种锁定方法可以以两种模式操作：locked_table_mode和normal_mode。
+   当我们处于locked_table_mode时，我们假设调用者已经对bucket进行了所有锁定。
+   我们还要求立即重新处理所有数据，以便调用者永远不必查看任何锁定。
+   在normal_mode中，我们实际上是采取锁定，并且可以懒惰地重新进行。
+   */
   using locked_table_mode = std::integral_constant<bool, true>;
   using normal_mode = std::integral_constant<bool, false>;
 
@@ -1073,13 +1085,18 @@ private:
                                           ? nullptr
                                           : &locks[lock_ind(i3)]));
   }
-
-  // snapshot_and_lock_two loads locks the buckets associated with the given
-  // hash value, making sure the hashpower doesn't change before the locks are
-  // taken. Thus it ensures that the buckets and locks corresponding to the
-  // hash value will stay correct as long as the locks are held. It returns
-  // the bucket indices associated with the hash value and the current
-  // hashpower.
+/*
+   snapshot_and_lock_two loads locks the buckets associated with the given
+   hash value, making sure the hashpower doesn't change before the locks are
+   taken. Thus it ensures that the buckets and locks corresponding to the
+   hash value will stay correct as long as the locks are held. It returns
+   the bucket indices associated with the hash value and the current
+   hashpower.
+   */
+  /*
+   snapshot_and_lock_two加载锁定与给定哈希值关联的存储bucket，确保在获取锁之前hashpower不会更改。
+   因此，只要保持锁定，它就确保对应于散列值的bucket和锁将保持正确。 它返回与哈希值和当前哈希值相关联的bucket索引。
+   */
   template <typename TABLE_MODE>
   TwoBuckets snapshot_and_lock_two(const hash_value &hv) const {
     while (true) {
@@ -1229,25 +1246,41 @@ private:
       }
     }
   }
+/*
+   cuckoo_insert tries to find an empty slot in either of the buckets to
+   insert the given key into, performing cuckoo hashing if necessary. It
+   expects the locks to be taken outside the function. Before inserting, it
+   checks that the key isn't already in the table. cuckoo hashing presents
+   multiple concurrency issues, which are explained in the function. The
+   following return states are possible:
 
-  // cuckoo_insert tries to find an empty slot in either of the buckets to
-  // insert the given key into, performing cuckoo hashing if necessary. It
-  // expects the locks to be taken outside the function. Before inserting, it
-  // checks that the key isn't already in the table. cuckoo hashing presents
-  // multiple concurrency issues, which are explained in the function. The
-  // following return states are possible:
-  //
-  // ok -- Found an empty slot, locks will be held on both buckets after the
-  // function ends, and the position of the empty slot is returned
-  //
-  // failure_key_duplicated -- Found a duplicate key, locks will be held, and
-  // the position of the duplicate key will be returned
-  //
-  // failure_under_expansion -- Failed due to a concurrent expansion
-  // operation. Locks are released. No meaningful position is returned.
-  //
-  // failure_table_full -- Failed to find an empty slot for the table. Locks
-  // are released. No meaningful position is returned.
+   ok -- Found an empty slot, locks will be held on both buckets after the
+   function ends, and the position of the empty slot is returned
+
+   failure_key_duplicated -- Found a duplicate key, locks will be held, and
+   the position of the duplicate key will be returned
+
+   failure_under_expansion -- Failed due to a concurrent expansion
+   operation. Locks are released. No meaningful position is returned.
+
+   failure_table_full -- Failed to find an empty slot for the table. Locks
+   are released. No meaningful position is returned.
+   */
+  /*
+   cuckoo_insert尝试在任一bucket中找到一个空slot以插入给定的key，必要时执行cuckoo散列。 它希望锁定在函数之外。
+   在插入之前，它检查key是否已在表中。 杜鹃哈希礼物多个并发问题，在函数中解释。该
+  以下返回状态是可能的：
+   
+    ok  - 找到一个空槽，在函数结束后，两个bucket上都会有锁，并返回空槽的位置
+  
+    failure_key_duplicated  - 找到重复的key，将保持锁定，并返回重复key的位置
+  
+    failure_under_expansion  - 由于并发扩展而失败
+   操作。 锁被释放。 没有返回有意义的位置。
+  
+    failure_table_full  - 无法找到表的空槽。锁
+    被释放。 没有返回有意义的位置。
+   */
   template <typename TABLE_MODE, typename K>
   table_position cuckoo_insert(const hash_value hv, TwoBuckets &b, K &key) {
     int res1, res2;
@@ -1321,7 +1354,7 @@ private:
    is found, we store -1 in `slot` and return true.
 */
   /*
-   try_find_insert_bucket将在桶中搜索给定的key，并为
+   try_find_insert_bucket将在bucket中搜索给定的key，并为
     一个空槽。 如果找到key，我们将key的槽存储在
     `slot`并返回false。 如果我们找到一个空槽，我们会存储它的位置
     在`slot`中返回true。 如果没有找到重复的key且没有空槽
@@ -1349,10 +1382,16 @@ private:
     return true;
   }
 
-  // CuckooRecord holds one position in a cuckoo path. Since cuckoopath
-  // elements only define a sequence of alternate hashings for different hash
-  // values, we only need to keep track of the hash values being moved, rather
-  // than the keys themselves.
+  /*
+   CuckooRecord holds one position in a cuckoo path. Since cuckoopath
+   elements only define a sequence of alternate hashings for different hash
+   values, we only need to keep track of the hash values being moved, rather
+   than the keys themselves.
+   */
+  /*
+   CuckooRecord在布谷鸟路径中占据一席之地。 由于cuckoopath元素仅为不同的哈希值定义了一系列备用哈希值，
+   因此我们只需要跟踪正在移动的哈希值，而不是键本身。
+   */
   typedef struct {
     size_type bucket;
     size_type slot;
@@ -1366,34 +1405,54 @@ private:
   // An array of CuckooRecords
   using CuckooRecords = std::array<CuckooRecord, MAX_BFS_PATH_LEN>;
 
-  // run_cuckoo performs cuckoo hashing on the table in an attempt to free up
-  // a slot on either of the insert buckets, which are assumed to be locked
-  // before the start. On success, the bucket and slot that was freed up is
-  // stored in insert_bucket and insert_slot. In order to perform the search
-  // and the swaps, it has to release the locks, which can lead to certain
-  // concurrency issues, the details of which are explained in the function.
-  // If run_cuckoo returns ok (success), then `b` will be active, otherwise it
-  // will not.
+  /*
+   run_cuckoo performs cuckoo hashing on the table in an attempt to free up
+   a slot on either of the insert buckets, which are assumed to be locked
+   before the start. On success, the bucket and slot that was freed up is
+   stored in insert_bucket and insert_slot. In order to perform the search
+   and the swaps, it has to release the locks, which can lead to certain
+   concurrency issues, the details of which are explained in the function.
+   If run_cuckoo returns ok (success), then `b` will be active, otherwise it
+   will not.
+   */
+  /*
+   run_cuckoo在表上执行cuckoo散列，试图释放任一插入bucket上的slot，这些slot在开始之前被假定为已锁定。
+   成功时，释放的存储bucket和slot存储在insert_bucket和insert_slot中。
+   为了执行搜索和交换，它必须释放锁，这可能导致某些并发问题，其细节在函数中解释。
+   如果run_cuckoo返回ok（成功），则`b`将处于活动状态 ，否则不会。
+   */
   template <typename TABLE_MODE>
   cuckoo_status run_cuckoo(TwoBuckets &b, size_type &insert_bucket,
                            size_type &insert_slot) {
-    // We must unlock the buckets here, so that cuckoopath_search and
-    // cuckoopath_move can lock buckets as desired without deadlock.
-    // cuckoopath_move has to move something out of one of the original
-    // buckets as its last operation, and it will lock both buckets and
-    // leave them locked after finishing. This way, we know that if
-    // cuckoopath_move succeeds, then the buckets needed for insertion are
-    // still locked. If cuckoopath_move fails, the buckets are unlocked and
-    // we try again. This unlocking does present two problems. The first is
-    // that another insert on the same key runs and, finding that the key
-    // isn't in the table, inserts the key into the table. Then we insert
-    // the key into the table, causing a duplication. To check for this, we
-    // search the buckets for the key we are trying to insert before doing
-    // so (this is done in cuckoo_insert, and requires that both buckets are
-    // locked). Another problem is that an expansion runs and changes the
-    // hashpower, meaning the buckets may not be valid anymore. In this
-    // case, the cuckoopath functions will have thrown a hashpower_changed
-    // exception, which we catch and handle here.
+      /*
+     We must unlock the buckets here, so that cuckoopath_search and
+     cuckoopath_move can lock buckets as desired without deadlock.
+     cuckoopath_move has to move something out of one of the original
+     buckets as its last operation, and it will lock both buckets and
+     leave them locked after finishing. This way, we know that if
+     cuckoopath_move succeeds, then the buckets needed for insertion are
+     still locked. If cuckoopath_move fails, the buckets are unlocked and
+     we try again. This unlocking does present two problems. The first is
+     that another insert on the same key runs and, finding that the key
+     isn't in the table, inserts the key into the table. Then we insert
+     the key into the table, causing a duplication. To check for this, we
+     search the buckets for the key we are trying to insert before doing
+     so (this is done in cuckoo_insert, and requires that both buckets are
+     locked). Another problem is that an expansion runs and changes the
+     hashpower, meaning the buckets may not be valid anymore. In this
+     case, the cuckoopath functions will have thrown a hashpower_changed
+     exception, which we catch and handle here.
+     */
+      /*
+       我们必须在这里解锁bucket，以便cuckoopath_search和cuckoopath_move可以根据需要锁定bucket而不会出现死锁。
+       cuckoopath_move必须移动一个原始的东西铲斗作为它的最后一个操作，它将锁定两个铲斗并在完成后将它们锁定。
+       这样，我们就知道如果cuckoopath_move成功，那么插入所需的存储bucket仍会被锁定。
+       如果cuckoopath_move失败，则解锁bucket，我们再试一次。这种解锁确实存在两个问题。
+       第一个是同一个键上的另一个插入运行，并找到该键不在表中，将键插入表中。然后我们将key插入表中，导致重复。
+       为了检查这一点，我们在执行此操作之前在bucket中搜索我们尝试插入的key（这在cuckoo_insert中完成，并且要求两个bucket都被锁定）。
+       另一个问题是扩展运行并更改散列函数，这意味着bucket可能不再有效。
+       在这种情况下，cuckoopath函数将抛出一个hashpower_changed异常，我们在此处捕获并处理。
+       */
     size_type hp = hashpower();
     b.unlock();
     CuckooRecords cuckoo_path;
@@ -1428,14 +1487,24 @@ private:
     return done ? ok : failure;
   }
 
-  // cuckoopath_search finds a cuckoo path from one of the starting buckets to
-  // an empty slot in another bucket. It returns the depth of the discovered
-  // cuckoo path on success, and -1 on failure. Since it doesn't take locks on
-  // the buckets it searches, the data can change between this function and
-  // cuckoopath_move. Thus cuckoopath_move checks that the data matches the
-  // cuckoo path before changing it.
-  //
-  // throws hashpower_changed if it changed during the search.
+  /*
+   cuckoopath_search finds a cuckoo path from one of the starting buckets to
+   an empty slot in another bucket. It returns the depth of the discovered
+   cuckoo path on success, and -1 on failure. Since it doesn't take locks on
+   the buckets it searches, the data can change between this function and
+   cuckoopath_move. Thus cuckoopath_move checks that the data matches the
+   cuckoo path before changing it.
+
+   throws hashpower_changed if it changed during the search.
+   */
+  /*
+   cuckoopath_search找到从其中一个起始存储bucket到另一个存储bucket中的空slot的布谷鸟路径。
+   它会在成功时返回已发现的布谷鸟路径的深度，并在失败时返回-1。
+   由于它不会对它搜索的bucket进行锁定，因此数据可以在此函数和cuckoopath_move之间进行更改。
+   因此cuckoopath_move在更改之前检查数据是否与布谷鸟路径匹配。
+  
+   如果在搜索期间发生了变化，则抛出hashpower_changed。
+   */
   template <typename TABLE_MODE>
   int cuckoopath_search(const size_type hp, CuckooRecords &cuckoo_path,
                         const size_type i1, const size_type i2) {
@@ -1489,24 +1558,41 @@ private:
     return x.depth;
   }
 
-  // cuckoopath_move moves keys along the given cuckoo path in order to make
-  // an empty slot in one of the buckets in cuckoo_insert. Before the start of
-  // this function, the two insert-locked buckets were unlocked in run_cuckoo.
-  // At the end of the function, if the function returns true (success), then
-  // both insert-locked buckets remain locked. If the function is
-  // unsuccessful, then both insert-locked buckets will be unlocked.
-  //
-  // throws hashpower_changed if it changed during the move.
+  /*
+   cuckoopath_move moves keys along the given cuckoo path in order to make
+   an empty slot in one of the buckets in cuckoo_insert. Before the start of
+   this function, the two insert-locked buckets were unlocked in run_cuckoo.
+   At the end of the function, if the function returns true (success), then
+   both insert-locked buckets remain locked. If the function is
+   unsuccessful, then both insert-locked buckets will be unlocked.
+
+   throws hashpower_changed if it changed during the move.
+   */
+  /*
+   cuckoopath_move沿着给定的布谷鸟路径移动键，以便在cuckoo_insert中的一个bucket中创建一个空槽。
+   在此功能启动之前，两个插入锁定的存储bucket在run_cuckoo中解锁。
+   在函数结束时，如果函数返回true（成功），则两个插入锁定的bucket都保持锁定状态。
+   如果该功能不成功，则两个插入锁定的存储bucket都将被解锁。
+  
+   如果在移动过程中发生了变化，则抛出hashpower_changed。
+   */
   template <typename TABLE_MODE>
   bool cuckoopath_move(const size_type hp, CuckooRecords &cuckoo_path,
                        size_type depth, TwoBuckets &b) {
     if (depth == 0) {
-      // There is a chance that depth == 0, when try_add_to_bucket sees
-      // both buckets as full and cuckoopath_search finds one empty. In
-      // this case, we lock both buckets. If the slot that
-      // cuckoopath_search found empty isn't empty anymore, we unlock them
-      // and return false. Otherwise, the bucket is empty and insertable,
-      // so we hold the locks and return true.
+        /*
+       There is a chance that depth == 0, when try_add_to_bucket sees
+       both buckets as full and cuckoopath_search finds one empty. In
+       this case, we lock both buckets. If the slot that
+       cuckoopath_search found empty isn't empty anymore, we unlock them
+       and return false. Otherwise, the bucket is empty and insertable,
+       so we hold the locks and return true.
+       */
+    /*
+     当try_add_to_bucket将两个bucket视为已满并且cuckoopath_search发现一个为空时，深度== 0的可能性很大。
+     在这种情况下，我们锁定两个bucket。 如果cuckoopath_search发现空的slot不再为空，我们将解锁它们并返回false。
+     否则，bucket是空的并且可插入，因此我们保持锁并返回true。
+     */
       const size_type bucket_i = cuckoo_path[0].bucket;
       assert(bucket_i == b.i1 || bucket_i == b.i2);
       b = lock_two(hp, b.i1, b.i2, TABLE_MODE());
@@ -1526,11 +1612,17 @@ private:
       TwoBuckets twob;
       LockManager extra_manager;
       if (depth == 1) {
-        // Even though we are only swapping out of one of the original
-        // buckets, we have to lock both of them along with the slot we
-        // are swapping to, since at the end of this function, they both
-        // must be locked. We store tb inside the extrab container so it
-        // is unlocked at the end of the loop.
+          /*
+         Even though we are only swapping out of one of the original
+         buckets, we have to lock both of them along with the slot we
+         are swapping to, since at the end of this function, they both
+         must be locked. We store tb inside the extrab container so it
+         is unlocked at the end of the loop.
+         */
+      /*
+       即使我们只是换掉其中一个原始存储bucket，我们也必须将它们与我们交换的slot一起锁定，因为在此功能结束时，它们都必须被锁定。
+       我们将tb存储在extrab容器中，以便在循环结束时解锁。
+       */
         std::tie(twob, extra_manager) =
             lock_three(hp, b.i1, b.i2, to.bucket, TABLE_MODE());
       } else {
@@ -1539,15 +1631,22 @@ private:
 
       bucket &fb = buckets_[from.bucket];
       bucket &tb = buckets_[to.bucket];
-
-      // We plan to kick out fs, but let's check if it is still there;
-      // there's a small chance we've gotten scooped by a later cuckoo. If
-      // that happened, just... try again. Also the slot we are filling in
-      // may have already been filled in by another thread, or the slot we
-      // are moving from may be empty, both of which invalidate the swap.
-      // We only need to check that the hash value is the same, because,
-      // even if the keys are different and have the same hash value, then
-      // the cuckoopath is still valid.
+      /*
+       We plan to kick out fs, but let's check if it is still there;
+       there's a small chance we've gotten scooped by a later cuckoo. If
+       that happened, just... try again. Also the slot we are filling in
+       may have already been filled in by another thread, or the slot we
+       are moving from may be empty, both of which invalidate the swap.
+       We only need to check that the hash value is the same, because,
+       even if the keys are different and have the same hash value, then
+       the cuckoopath is still valid.
+       */
+      /*
+       我们计划开出fs，但是让我们检查它是否仍在那里; 我们被后来的杜鹃淹没的可能性很小。
+        如果发生这种情况，请......再试一次。 我们填写的slot可能已经被另一个线程填充，
+        或者我们正在移动的slot可能是空的，这两个slot都使swap无效。我们只需要检查散列值是否相同，
+        因为， 即使key不同并且具有相同的散列值，但是cuckoopath仍然有效。
+       */
       if (tb.occupied(ts) || !fb.occupied(fs) ||
           hashed_key_only_hash(fb.key(fs)) != from.hv.hash) {
         return false;
@@ -1575,10 +1674,15 @@ private:
   struct b_slot {
     // The bucket of the last item in the path.
     size_type bucket;
-    // a compressed representation of the slots for each of the buckets in
-    // the path. pathcode is sort of like a base-slot_per_bucket number, and
-    // we need to hold at most MAX_BFS_PATH_LEN slots. Thus we need the
-    // maximum pathcode to be at least slot_per_bucket()^(MAX_BFS_PATH_LEN).
+//     a compressed representation of the slots for each of the buckets in
+//     the path. pathcode is sort of like a base-slot_per_bucket number, and
+//     we need to hold at most MAX_BFS_PATH_LEN slots. Thus we need the
+//     maximum pathcode to be at least slot_per_bucket()^(MAX_BFS_PATH_LEN).
+    /*
+     路径中每个bucket的slot的压缩表示。
+     pathcode有点像base-slot_per_bucket号，我们需要最多保存MAX_BFS_PATH_LEN个槽。
+     因此，我们需要最大路径码至少为slot_per_bucket（）^（MAX_BFS_PATH_LEN）。
+     */
     uint16_t pathcode;
     static_assert(const_pow(slot_per_bucket(), MAX_BFS_PATH_LEN) <
                       std::numeric_limits<decltype(pathcode)>::max(),
@@ -1652,6 +1756,13 @@ private:
   // out of space, it fails.
   //
   // throws hashpower_changed if it changed during the search
+  /*
+   slot_search使用广度优先搜索搜索布谷鸟路径。 它
+    从i1和i2bucket开始，直到它找到一个带有空槽的bucket，在b_slot中添加bucket的每个槽。 如果队列运行
+    太空了，它失败了。
+  
+    如果在搜索期间发生了变化，则抛出hashpower_changed异常。
+   */
   template <typename TABLE_MODE>
   b_slot slot_search(const size_type hp, const size_type i1,
                      const size_type i2) {
@@ -1885,7 +1996,7 @@ private:
   /*
    cuckoo_expand_simple会将表的大小调整为至少给定的值new_hashpower。
    当我们缩小表格时，如果是当前表格包含的元素多于new_hashpower可以保存的元素,
-   则最终hashpower将大于`new_hp`。 它需要占用所有桶锁，因为在扩展期间没有其他操作可以更改表。
+   则最终hashpower将大于`new_hp`。 它需要占用所有bucket锁，因为在扩展期间没有其他操作可以更改表。
    如果我们正在扩展超过最大hashpower，则抛出libcuckoo_maximum_hashpower_exceeded，因为我们有一个实际限制。
    */
   template <typename TABLE_MODE, typename AUTO_RESIZE>
